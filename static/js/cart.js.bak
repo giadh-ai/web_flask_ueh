@@ -1,0 +1,133 @@
+// Key để lưu trong LocalStorage 
+const CART_KEY = "MY_APP_CART";
+
+// Hàm lấy giỏ hàng từ LocalStorage
+function getCart() {
+    const stored = localStorage.getItem(CART_KEY);
+    return stored ? JSON.parse(stored) : [];
+}
+
+// Hàm lưu giỏ hàng
+function saveCart(cart) {
+    localStorage.setItem(CART_KEY, JSON.stringify(cart));
+    updateCartBadge(); // Cập nhật số lượng trên menu
+}
+
+// Hàm thêm vào giỏ (Mô phỏng addToCart trong Context)
+function addToCart(product) {
+    let cart = getCart();
+    // Kiểm tra sản phẩm đã có chưa
+    const existingItem = cart.find(item => item.product.id === product.id);
+    
+    if (existingItem) {
+        existingItem.quantity += 1;
+    } else {
+        cart.push({ product: product, quantity: 1 });
+    }
+    
+    saveCart(cart);
+    updateCartBadge();
+    alert(`Đã thêm "${product.title}" vào giỏ hàng!`);
+}
+
+// Hàm cập nhật số lượng badge trên menu
+function updateCartBadge() {
+    const cart = getCart();
+    const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
+    
+    const badge = document.getElementById('cart-badge');
+    if (badge) {
+        badge.innerText = totalQty;
+        badge.style.display = totalQty > 0 ? 'inline-block' : 'none';
+    }
+}
+
+// Hàm format tiền tệ
+function formatCurrency(amount) {
+    return "$" + parseFloat(amount).toFixed(2);
+}
+
+// --- LOGIC CHO TRANG CART.HTML ---
+function renderCartPage() {
+    const cart = getCart();
+    const container = document.getElementById('cart-container');
+    const emptyMsg = document.getElementById('cart-empty');
+    const cartTable = document.getElementById('cart-table');
+    const totalPriceEl = document.getElementById('total-price');
+
+    if (!container) return; // Không phải trang cart thì thoát
+
+    if (cart.length === 0) {
+        emptyMsg.style.display = 'block';
+        cartTable.style.display = 'none';
+        return;
+    }
+
+    emptyMsg.style.display = 'none';
+    cartTable.style.display = 'block';
+
+    // Render danh sách
+    const tbody = document.getElementById('cart-body');
+    tbody.innerHTML = '';
+    
+    let total = 0;
+
+    cart.forEach(item => {
+        const p = item.product;
+        const lineTotal = p.price * item.quantity;
+        total += lineTotal;
+
+        const row = `
+            <tr>
+                <td style="padding: 10px; display: flex; align-items: center; gap: 10px;">
+                    <img src="${p.image || '/static/images/khongcoanh.png'}" width="50" height="50" style="object-fit: contain;">
+                    <span>${p.title}</span>
+                </td>
+                <td>${formatCurrency(p.price)}</td>
+                <td>
+                    <button onclick="changeQty(${p.id}, -1)" class="btn-qty">-</button>
+                    <span style="margin: 0 10px;">${item.quantity}</span>
+                    <button onclick="changeQty(${p.id}, 1)" class="btn-qty">+</button>
+                </td>
+                <td style="color: #d32f2f; font-weight: bold;">${formatCurrency(lineTotal)}</td>
+                <td>
+                    <button onclick="removeItem(${p.id})" class="btn-remove">🗑 Xóa</button>
+                </td>
+            </tr>
+        `;
+        tbody.innerHTML += row;
+    });
+
+    if (totalPriceEl) totalPriceEl.innerText = formatCurrency(total);
+}
+
+// Hàm tăng giảm số lượng
+function changeQty(productId, delta) {
+    let cart = getCart();
+    const item = cart.find(i => i.product.id === productId);
+    
+    if (item) {
+        item.quantity += delta;
+        if (item.quantity <= 0) {
+            cart = cart.filter(i => i.product.id !== productId);
+        }
+    }
+    
+    saveCart(cart);
+    renderCartPage(); // Render lại trang
+}
+
+// Hàm xóa sản phẩm
+function removeItem(productId) {
+    if(!confirm("Bạn có chắc muốn xóa sản phẩm này?")) return;
+    let cart = getCart();
+    cart = cart.filter(i => i.product.id !== productId);
+    saveCart(cart);
+    renderCartPage();
+}
+
+// Khởi chạy khi load trang
+document.addEventListener('DOMContentLoaded', () => {
+    updateCartBadge();
+    renderCartPage();
+});
