@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request, jsonify
 import requests
 import os
 
@@ -16,10 +16,17 @@ HEADERS = {
     "Prefer": "return=representation"
 }
 
+# --- CẤU HÌNH GEMINI API (CHATBOT) ---
+# Key lấy từ file ChatPage.tsx của bạn
+GEMINI_API_KEY = "AIzaSyDEIOTfJFro2tbg7RQCNKTZuUUQaGKzC5o"
+GEMINI_MODEL = "models/gemini-2.5-flash"
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+
+
 # --- 1. TRANG CHỦ (HOME) ---
 @app.route('/')
 def home():
-    # Gọi API lấy toàn bộ sản phẩm từ bảng 'product1' (bảng mới giống React)
+    # Gọi API lấy toàn bộ sản phẩm từ bảng 'product1'
     # Sắp xếp theo id tăng dần
     url = f"{SUPABASE_URL}/rest/v1/product1?select=*&order=id.asc"
     
@@ -27,7 +34,6 @@ def home():
         response = requests.get(url, headers=HEADERS)
         if response.status_code == 200:
             products = response.json()
-            # Nếu API trả về None thì gán là danh sách rỗng
             if products is None:
                 products = []
             return render_template('trangchu.html', products=products)
@@ -60,14 +66,54 @@ def product_detail(product_id):
         return f"Lỗi hệ thống: {str(e)}", 500
 
 
-# --- 3. GIỎ HÀNG (QUAN TRỌNG: Route này sửa lỗi BuildError) ---
+# --- 3. GIỎ HÀNG ---
 @app.route('/cart')
 def cart():
     # Trả về giao diện giỏ hàng
     return render_template('cart.html')
 
 
-# --- 4. CÁC TRANG TĨNH KHÁC ---
+# --- 4. CHỨC NĂNG CHATBOT (MỚI THÊM) ---
+
+# Route hiển thị giao diện Chat
+@app.route('/chat')
+def chat_page():
+    return render_template('chat.html')
+
+# API xử lý tin nhắn (Gọi Google Gemini)
+@app.route('/api/chat-process', methods=['POST'])
+def chat_process():
+    try:
+        data = request.json
+        user_message = data.get('message', '')
+
+        if not user_message:
+            return jsonify({'reply': 'Vui lòng nhập nội dung.'}), 400
+
+        # Cấu trúc payload gửi sang Google Gemini
+        payload = {
+            "contents": [{
+                "parts": [{"text": user_message}]
+            }]
+        }
+
+        # Gọi Google API từ Server Python
+        response = requests.post(GEMINI_URL, json=payload, headers={'Content-Type': 'application/json'})
+        
+        if response.status_code == 200:
+            result = response.json()
+            # Trích xuất nội dung trả lời
+            bot_reply = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', 'Không có phản hồi.')
+            return jsonify({'reply': bot_reply})
+        else:
+            return jsonify({'reply': f'Lỗi từ Google: {response.status_code}'}), 500
+
+    except Exception as e:
+        print(f"Lỗi Chat: {str(e)}")
+        return jsonify({'reply': 'Xin lỗi, hệ thống đang bận.'}), 500
+
+
+# --- 5. CÁC TRANG TĨNH KHÁC ---
 @app.route('/gioi-thieu')
 def gioi_thieu():
     return render_template('gioi_thieu.html')
